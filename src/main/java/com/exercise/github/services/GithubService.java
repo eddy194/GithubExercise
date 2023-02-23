@@ -29,9 +29,6 @@ public class GithubService {
 
     private static final Logger logger = LoggerFactory.getLogger(GithubService.class);
 
-    @Value("${github.api.base.url}")
-    private String githubApiBaseUrl; // The base URL for the GitHub API
-
     @Value("${github.api.branches.uri}")
     private String branchesUri;
 

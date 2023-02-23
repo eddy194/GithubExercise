@@ -27,8 +27,6 @@ import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class GithubServiceTests {
-    @Mock
-    private WebClient.Builder webClientBuilder;
 
     @Mock
     private WebClient webClient;

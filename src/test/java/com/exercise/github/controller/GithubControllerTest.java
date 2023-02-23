@@ -9,12 +9,13 @@ import com.exercise.github.models.Repository;
 import com.exercise.github.services.GithubService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
-import org.springframework.web.HttpMediaTypeNotAcceptableException;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
@@ -36,7 +37,7 @@ class GithubControllerTest {
     private GithubController githubController;
 
     @Test
-    void getNonForkRepositories_WithExistingUser_ReturnsRepositories() throws HttpMediaTypeNotAcceptableException {
+    void getNonForkRepositories_WithExistingUser_ReturnsRepositories() {
         // given
         String username = "existinguser";
         List<Repository> expectedRepositories = Arrays.asList(new Repository("repo1", username, Collections.emptyList()), new Repository("repo2", username, Collections.emptyList()));
@@ -52,7 +53,7 @@ class GithubControllerTest {
     }
 
     @Test
-    void getNonForkRepositories_WithNonExistingUser_ReturnsNotFound() throws HttpMediaTypeNotAcceptableException {
+    void getNonForkRepositories_WithNonExistingUser_ReturnsNotFound() {
         // given
         String username = "nonexistinguser";
         doReturn(Flux.empty()).when(githubService).getNonForkRepositories(username);
@@ -65,8 +66,7 @@ class GithubControllerTest {
         // then
         StepVerifier.create(result)
                 .expectNextMatches(error -> {
-                    if (error instanceof ErrorResponse) {
-                        ErrorResponse errorResponse = (ErrorResponse) error;
+                    if (error instanceof ErrorResponse errorResponse) {
                         return errorResponse.getStatus() == HttpStatus.NOT_FOUND.value() && errorResponse.getMessage().equals("The specified Github user '" + username + "' could not be found");
                     }
                     return false;
@@ -87,8 +87,7 @@ class GithubControllerTest {
         // then
         StepVerifier.create(result)
                 .expectNextMatches(error -> {
-                    if (error instanceof ErrorResponse) {
-                        ErrorResponse errorResponse = (ErrorResponse) error;
+                    if (error instanceof ErrorResponse errorResponse) {
                         return errorResponse.getStatus() == HttpStatus.NOT_ACCEPTABLE.value() && errorResponse.getMessage().equals("XML format is not supported");
                     }
                     return false;
@@ -96,10 +95,17 @@ class GithubControllerTest {
                 .verifyComplete();
     }
 
-    @Test
-    void getNonForkRepositories_WithServerError_ReturnsInternalServerError() {
+    @ParameterizedTest
+    @CsvSource({
+            "'testuser',true",
+            "'',true",
+            "'null',true"
+    })
+    void getNonForkRepositories_WithDifferentUsername_ReturnsExpectedError(String username, boolean expectError) {
         // given
-        String username = "testuser";
+        if (username.equals("null")) {
+            username = null;
+        }
         doReturn(Flux.error(new RuntimeException("An error occurred while processing your request."))).when(githubService).getNonForkRepositories(username);
 
         // when
@@ -112,70 +118,22 @@ class GithubControllerTest {
                 .onErrorResume(Exception.class, ex -> Mono.just(new ErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR.value(), ex.getMessage())));
 
         // then
-        StepVerifier.create(result)
-                .expectNextMatches(error -> {
-                    if (error instanceof ErrorResponse) {
-                        ErrorResponse errorResponse = (ErrorResponse) error;
-                        return errorResponse.getStatus() == HttpStatus.INTERNAL_SERVER_ERROR.value() && errorResponse.getMessage().equals("An error occurred while processing your request.");
-                    }
-                    return false;
-                })
-                .verifyComplete();
+        if (expectError) {
+            StepVerifier.create(result)
+                    .expectNextMatches(error -> {
+                        if (error instanceof ErrorResponse errorResponse) {
+                            return errorResponse.getStatus() == HttpStatus.INTERNAL_SERVER_ERROR.value() && errorResponse.getMessage().equals("An error occurred while processing your request.");
+                        }
+                        return false;
+                    })
+                    .verifyComplete();
+        } else {
+            StepVerifier.create(result)
+                    .expectNext(new ArrayList<>())
+                    .verifyComplete();
+        }
     }
 
-    @Test
-    void getNonForkRepositories_WithNullUsername_ReturnsBadRequest() {
-        // given
-        String username = null;
-        doReturn(Flux.error(new RuntimeException("An error occurred while processing your request."))).when(githubService).getNonForkRepositories(username);
-
-        // when
-        Mono<Object> result = githubController.getNonForkRepositories(username, MediaType.APPLICATION_JSON_VALUE)
-                .collectList()
-                .onErrorResume(GithubUserNotFoundException.class, ex -> Mono.just(new ArrayList<>()))
-                .flatMapMany(Flux::fromIterable)
-                .last()
-                .then(Mono.error(new Exception("An error occurred while processing your request.")))
-                .onErrorResume(Exception.class, ex -> Mono.just(new ErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR.value(), ex.getMessage())));
-
-        // then
-        StepVerifier.create(result)
-                .expectNextMatches(error -> {
-                    if (error instanceof ErrorResponse) {
-                        ErrorResponse errorResponse = (ErrorResponse) error;
-                        return errorResponse.getStatus() == HttpStatus.INTERNAL_SERVER_ERROR.value() && errorResponse.getMessage().equals("An error occurred while processing your request.");
-                    }
-                    return false;
-                })
-                .verifyComplete();
-    }
-
-    @Test
-    void getNonForkRepositories_WithEmptyUsername_ReturnsBadRequest() {
-        // given
-        String username = "";
-        doReturn(Flux.error(new RuntimeException("An error occurred while processing your request."))).when(githubService).getNonForkRepositories(username);
-
-        // when
-        Mono<Object> result = githubController.getNonForkRepositories(username, MediaType.APPLICATION_JSON_VALUE)
-                .collectList()
-                .onErrorResume(GithubUserNotFoundException.class, ex -> Mono.just(new ArrayList<>()))
-                .flatMapMany(Flux::fromIterable)
-                .last()
-                .then(Mono.error(new Exception("An error occurred while processing your request.")))
-                .onErrorResume(Exception.class, ex -> Mono.just(new ErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR.value(), ex.getMessage())));
-
-        // then
-        StepVerifier.create(result)
-                .expectNextMatches(error -> {
-                    if (error instanceof ErrorResponse) {
-                        ErrorResponse errorResponse = (ErrorResponse) error;
-                        return errorResponse.getStatus() == HttpStatus.INTERNAL_SERVER_ERROR.value() && errorResponse.getMessage().equals("An error occurred while processing your request.");
-                    }
-                    return false;
-                })
-                .verifyComplete();
-    }
 
     @Test
     void getNonForkRepositoriesWithoutUser_ReturnsBadRequest() {
@@ -193,8 +151,7 @@ class GithubControllerTest {
         // then
         StepVerifier.create(result)
                 .expectNextMatches(error -> {
-                    if (error instanceof ErrorResponse) {
-                        ErrorResponse errorResponse = (ErrorResponse) error;
+                    if (error instanceof ErrorResponse errorResponse) {
                         return errorResponse.getStatus() == HttpStatus.BAD_REQUEST.value()
                                 && errorResponse.getMessage().equals(INVALID_USERNAME_ERROR_MESSAGE);
                     }
