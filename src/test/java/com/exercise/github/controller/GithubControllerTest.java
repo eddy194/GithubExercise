@@ -10,7 +10,9 @@ import com.exercise.github.services.GithubService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -24,6 +26,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.stream.Stream;
 
 import static com.exercise.github.exceptions.InvalidUsernameException.INVALID_USERNAME_ERROR_MESSAGE;
 import static org.mockito.Mockito.doReturn;
@@ -95,17 +98,19 @@ class GithubControllerTest {
                 .verifyComplete();
     }
 
+    private static Stream<Arguments> provideUserNameAndExpectError() {
+        return Stream.of(
+                Arguments.of("testuser", true),
+                Arguments.of("", true),
+                Arguments.of(null, true)
+        );
+    }
+
+
     @ParameterizedTest
-    @CsvSource({
-            "'testuser',true",
-            "'',true",
-            "'null',true"
-    })
+    @MethodSource("provideUserNameAndExpectError")
     void getNonForkRepositories_WithDifferentUsername_ReturnsExpectedError(String username, boolean expectError) {
         // given
-        if (username.equals("null")) {
-            username = null;
-        }
         doReturn(Flux.error(new RuntimeException("An error occurred while processing your request."))).when(githubService).getNonForkRepositories(username);
 
         // when
